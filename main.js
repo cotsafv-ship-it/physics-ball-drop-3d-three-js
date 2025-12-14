@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import { OrbitControls } from 'three/examples/jsm/Addons.js';
-import { saveRendererAndSceneState } from 'three/src/renderers/common/RendererUtils.js';
+import { OrbitControls} from 'three/examples/jsm/Addons.js';
 
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
@@ -16,11 +15,13 @@ if (sessionStorage.getItem("camX")){
 const renderer = new THREE.WebGLRenderer()
 
 const loader = new GLTFLoader()
-const floor = new THREE.GridHelper(200, 50)
-const roof = new THREE.GridHelper(200, 50)
-roof.position.y = 20
+const floor = new THREE.GridHelper(2000, 500) // its a ratio where
+const axis = new THREE.AxesHelper(100)
+
+
 scene.add(floor)
-scene.add(roof)
+scene.add(axis)
+
 const ambientLight = new THREE.AmbientLight(0xffffff, 1)
 scene.add(ambientLight)
 
@@ -29,75 +30,93 @@ const controls = new OrbitControls(camera, renderer.domElement)
 renderer.setSize(window.innerWidth, window.innerHeight)
 document.body.appendChild(renderer.domElement)
 
-let hit = 0
 
 
-class Ball {
-    static g = 0.1
-    static groundLevel = 0
-    constructor(startX, startY, startZ) {
-        this.x = startX
-        this.y = startY
-        this.z = startZ
-        this.velocityX = 0
-        this.velocityY = 10
-        this.radius = 1
-        this.roofLevel = roof.position.y
-        this.geo = new THREE.SphereGeometry(this.radius, 100, 100)
-        this.material = new THREE.MeshBasicMaterial({color: "yellow"})
+class Planet {
+    static g = 6.6743e-11
+    constructor(x, y, z, mass, radius, color) {
+        this.x = x
+        this.y = y
+        this.z = z
+        this.startX = x
+        this.startZ = z
+        this.mass = mass
+        this.radius = radius
+        this.color = color
+        this.angle = 0
+        this.geo = new THREE.SphereGeometry(this.radius)
+        this.material = new THREE.MeshBasicMaterial({color: this.color})
+        this.threeuse = new THREE.Mesh(this.geo, this.material)
+        this.threeuse.position.set(this.x, this.y, this.z)
+        scene.add(this.threeuse)
+    } 
+    update() {
+        this.threeuse.position.set(this.x, this.y, this.z)
+    }
+}
+
+class Moon {
+    constructor(x, y, z, mass, radius, orbitRadius, color) {
+        this.x = x
+        this.y = y
+        this.z = z
+        this.radius = radius
+        this.mass = mass
+        this.orbitRadius = orbitRadius
+        this.color = color
+        this.angle = 0
+
+        this.geo = new THREE.SphereGeometry(this.radius)
+        this.material = new THREE.MeshBasicMaterial({color: this.color})
         this.threeuse = new THREE.Mesh(this.geo, this.material)
         this.threeuse.position.set(this.x, this.y, this.z)
         scene.add(this.threeuse)
     }
 
     update() {
-        this.velocityY += Ball.g
-        this.y -= this.velocityY
-        
-        this.x += this.velocityX
-
-        //y collision floor
-        if (this.y - this.radius < Ball.groundLevel && this.velocityY > 0.15) {
-            this.y = Ball.groundLevel + this.radius
-            this.velocityY *= -0.8
-        } else if (this.y - this.radius < Ball.groundLevel && this.velocityY < 0.15) {
-            this.y = Ball.groundLevel + this.radius
-            this.velocityY = 0
-        }
-
-        //y collision roof
-        this.roofLevel = roof.position.y
-        if (this.y + this.radius >  this.roofLevel) {
-            this.y = this.roofLevel - this.radius
-            this.velocityY *= -0.8
-            console.log("roof hit time:" + hit, "current velocity: " + this.velocityY)
-            hit += 1
-        }
-        
-
-        this.threeuse.position.y = this.y
-        this.threeuse.position.x = this.x
-
-
+        this.threeuse.position.set(this.x, this.y, this.z)
     }
 }
+const sun = new Planet(0, 0, 0, (1.9985 * 10**30), 10, "yellow")
+const earth = new Planet(90, 0, 0, (5.5134 * 10**24), 3.5, "green")
+const mercury = new Planet(15, 0, 0, 10, 0.9, "white")
+const venus = new Planet(50, 0, 0, 10, 3.1, "orange")
+const earthMoon = new Moon(90, 0, 10, 2, 1.4, 7, "white")
 
+function rotateMoon(center, object) {
+    const theta = object.angle / 180 * Math.PI
+    object.x = center.x + object.orbitRadius * Math.sin(theta)
+    object.z = center.z + object.orbitRadius * Math.cos(theta)
 
-let list = []
+    object.angle += 3.65
 
-for (let i = 0; i < 1; i++) {
-    list.push(new Ball(0, 10, 0))
+    object.update()
+
+}
+
+function rotatePlanet(center, object) {
+    const theta = object.angle / 180 * Math.PI
+    const radius = Math.hypot(object.x - center.x, object.z - center.z)
+
+    let velocity = Math.sqrt(Planet.g * object.mass / radius) // TODO: implement the relation to speed through angle increasing
+    
+
+    //orbit
+    object.x = center.x + radius * Math.sin(theta)
+    object.z = center.z + radius * Math.cos(theta)
+
+    object.angle += 0.1
+    object.update()
 }
 
 
 
 function animate() {
-    for (let i = 0; i < list.length; i++) {
-        list[i].update()
-    }
-
-
-
+    //app
+    rotatePlanet(sun, earth)
+    rotatePlanet(sun, mercury)
+    rotatePlanet(sun, venus)
+    rotateMoon(earth, earthMoon)
     sessionStorage.setItem("camX", camera.position.x)
     sessionStorage.setItem("camY", camera.position.y)
     sessionStorage.setItem("camZ", camera.position.z)
